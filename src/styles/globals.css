@@ -1,12 +1,190 @@
+/* Global styles for the application */
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  background: #111122;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-canvas {
-  display: block;
+html {
+  scroll-behavior: smooth;
+}
+
+/* 3D Background Scene Styles */
+.hero-3d-background {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-3d-background canvas {
+  display: block !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+/* Hero section specific styles */
+.hero-section {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-content-overlay {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* Content sections that come after hero */
+.content-sections {
+  position: relative;
+  z-index: 10;
+  background: white;
+}
+
+/* Error overlay styles */
+.error-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  font-family: monospace;
+}
+
+/* Smooth scrolling for internal navigation */
+a[href^="#"] {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #14b8a6, #8b5cf6);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #0f766e, #7c3aed);
+}
+
+/* Loading animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero-content-overlay {
+    margin: 0 1rem;
+    padding: 2rem !important;
+  }
+  
+  .hero-content-overlay h1 {
+    font-size: 3rem !important;
+  }
+  
+  .hero-content-overlay h2 {
+    font-size: 1.5rem !important;
+  }
+  
+  .hero-content-overlay p {
+    font-size: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-content-overlay h1 {
+    font-size: 2.5rem !important;
+  }
+  
+  .hero-content-overlay .flex {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .hero-content-overlay button {
+    width: 100%;
+  }
+}
+
+/* Performance optimizations */
+* {
+  box-sizing: border-box;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Focus styles for accessibility */
+button:focus,
+input:focus,
+textarea:focus {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+  .hero-3d-background {
+    display: none;
+  }
+  
+  .hero-section {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: white;
+  }
 }

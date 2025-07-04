@@ -2,56 +2,55 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { useInterlockSystem } from './InterlockSystem';
+
+// Shape Components
 import HookedTorus from './shapes/HookedTorus';
 import PuzzleCube from './shapes/PuzzleCube';
 import SpiralArm from './shapes/SpiralArm';
-import { useInterlockSystem } from './InterlockSystem';
+import QuantumEntanglementKnot from './shapes/QuantumEntanglementKnot';
 
 export default function Systems() {
   const { scene } = useThree();
   const [shapes, setShapes] = useState([]);
   const shapeRefs = useRef({});
+  const shapesList = useRef([]);
 
-  // Robust movement system with null checks
+  // Movement System with robust error handling
   const movementSystem = useRef({
     objects: [],
     attractionForces: new Map(),
     clock: new THREE.Clock(),
     
-    addObject: (object, params = {}) => {
-      if (!object) {
-        console.warn('Attempted to add null object to movement system');
+    addObject: (obj, params = {}) => {
+      if (!obj || !obj.position || !obj.rotation) {
+        console.warn('Invalid object passed to movement system');
         return;
       }
 
-      // Ensure all movement parameters have safe defaults
-      const safeParams = {
-        speed: typeof params.speed === 'number' ? params.speed : 0.5 + Math.random(),
-        direction: params.direction instanceof THREE.Vector3 
-          ? params.direction.clone() 
-          : new THREE.Vector3(
-              Math.random() * 2 - 1,
-              Math.random() * 2 - 1,
-              Math.random() * 2 - 1
-            ).normalize(),
-        rotationSpeed: params.rotationSpeed instanceof THREE.Vector3
-          ? params.rotationSpeed.clone()
-          : new THREE.Vector3(
-              Math.random() * 0.01,
-              Math.random() * 0.01,
-              Math.random() * 0.01
-            )
+      const defaultParams = {
+        speed: 0.5 + Math.random(),
+        direction: new THREE.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 2 - 1,
+          Math.random() * 2 - 1
+        ).normalize(),
+        rotationSpeed: new THREE.Vector3(
+          Math.random() * 0.01,
+          Math.random() * 0.01,
+          Math.random() * 0.01
+        )
       };
 
       movementSystem.current.objects.push({
-        object,
-        ...safeParams
+        object: obj,
+        ...{ ...defaultParams, ...params }
       });
     },
     
     addAttractionForce: (obj1, obj2, strength = 0.01, threshold = 2) => {
-      if (!obj1 || !obj2) {
-        console.warn('Attempted to add attraction force with null objects');
+      if (!obj1?.position || !obj2?.position) {
+        console.warn('Invalid objects for attraction force');
         return;
       }
       const key = `${obj1.uuid}-${obj2.uuid}`;
@@ -64,156 +63,207 @@ export default function Systems() {
     },
     
     update: () => {
-      const delta = movementSystem.current.clock.getDelta();
+      const delta = Math.min(movementSystem.current.clock.getDelta(), 0.1); // Cap delta for safety
       
-      movementSystem.current.objects.forEach(obj => {
-        // Skip if object or parameters are invalid
-        if (!obj?.object || !obj.direction || !obj.rotationSpeed) return;
+      // Update object movements with null checks
+      movementSystem.current.objects = movementSystem.current.objects.filter(obj => {
+        if (!obj?.object?.position || !obj?.direction || !obj?.rotationSpeed) {
+          return false; // Remove invalid objects
+        }
         
-        // Clone vectors to prevent mutation issues
-        const direction = obj.direction.clone();
-        const rotationSpeed = obj.rotationSpeed.clone();
-        
-        // Safe property access with fallbacks
-        const speed = typeof obj.speed === 'number' ? obj.speed : 1;
-        const position = obj.object.position;
-        
-        // Update position with null checks
-        if (typeof position.x === 'number') position.x += direction.x * speed * delta;
-        if (typeof position.y === 'number') position.y += direction.y * speed * delta;
-        if (typeof position.z === 'number') position.z += direction.z * speed * delta;
-        
-        // Update rotation with null checks
-        if (typeof obj.object.rotation.x === 'number') obj.object.rotation.x += rotationSpeed.x * delta;
-        if (typeof obj.object.rotation.y === 'number') obj.object.rotation.y += rotationSpeed.y * delta;
-        if (typeof obj.object.rotation.z === 'number') obj.object.rotation.z += rotationSpeed.z * delta;
-        
-        // Boundary checks
-        const bounds = 10;
-        if (Math.abs(position.x) > bounds) direction.x *= -1;
-        if (Math.abs(position.y) > bounds) direction.y *= -1;
-        if (Math.abs(position.z) > bounds) direction.z *= -1;
-        
-        // Update stored direction
-        obj.direction = direction;
+        try {
+          obj.object.position.x += obj.direction.x * obj.speed * delta;
+          obj.object.position.y += obj.direction.y * obj.speed * delta;
+          obj.object.position.z += obj.direction.z * obj.speed * delta;
+          
+          obj.object.rotation.x += obj.rotationSpeed.x * delta;
+          obj.object.rotation.y += obj.rotationSpeed.y * delta;
+          obj.object.rotation.z += obj.rotationSpeed.z * delta;
+          
+          // Boundary checks with safe property access
+          const bounds = 10;
+          ['x', 'y', 'z'].forEach(axis => {
+            if (Math.abs(obj.object.position[axis]) > bounds) {
+              obj.direction[axis] *= -1;
+            }
+          });
+          
+          return true;
+        } catch (error) {
+          console.warn('Error updating object movement:', error);
+          return false;
+        }
       });
       
-      movementSystem.current.attractionForces.forEach(force => {
-        if (!force?.obj1?.position || !force?.obj2?.position) return;
+      // Update attraction forces with null checks
+      movementSystem.current.attractionForces.forEach((force, key) => {
+        if (!force?.obj1?.position || !force?.obj2?.position) {
+          movementSystem.current.attractionForces.delete(key);
+          return;
+        }
         
-        const direction = new THREE.Vector3().subVectors(
-          force.obj2.position,
-          force.obj1.position
-        );
-        const distance = direction.length();
-        
-        if (distance < (force.threshold || 2) && distance > 0.1) {
-          direction.normalize().multiplyScalar((force.strength || 0.01) * delta);
-          force.obj1.position.add(direction);
+        try {
+          const direction = new THREE.Vector3().subVectors(
+            force.obj2.position,
+            force.obj1.position
+          );
+          const distance = direction.length();
+          
+          if (distance < force.threshold && distance > 0.1) {
+            direction.normalize().multiplyScalar(force.strength * delta);
+            force.obj1.position.add(direction);
+          }
+        } catch (error) {
+          console.warn('Error updating attraction force:', error);
+          movementSystem.current.attractionForces.delete(key);
         }
       });
     },
     
-    smoothMoveTo: (object, target, duration = 1) => {
-      if (!object?.position || !target) return;
-      gsap.to(object.position, {
-        x: target.x || 0,
-        y: target.y || 0,
-        z: target.z || 0,
+    smoothMoveTo: (obj, target, duration = 1) => {
+      if (!obj?.position || !target) {
+        console.warn('Invalid target or object for smooth move');
+        return;
+      }
+      
+      const safeTarget = {
+        x: typeof target.x === 'number' ? target.x : obj.position.x,
+        y: typeof target.y === 'number' ? target.y : obj.position.y,
+        z: typeof target.z === 'number' ? target.z : obj.position.z
+      };
+      
+      gsap.to(obj.position, {
+        ...safeTarget,
         duration,
         ease: 'power2.out'
       });
     }
   });
 
-  const interlockSystem = useInterlockSystem(movementSystem, shapes);
-
+  // Initialize shapes with validation
   useEffect(() => {
     const initialShapes = [
+      // Orbiting shapes
       { type: 'HookedTorus', props: { radius: 2, tube: 0.5, position: [-5, 0, 0], name: 'torus1' } },
       { type: 'HookedTorus', props: { radius: 1.8, tube: 0.4, position: [5, 0, 0], name: 'torus2' } },
       { type: 'PuzzleCube', props: { size: 2, position: [0, -5, 0], name: 'cube1' } },
       { type: 'PuzzleCube', props: { size: 1.5, position: [0, 5, 0], name: 'cube2' } },
       { type: 'SpiralArm', props: { radius: 1, length: 3, position: [0, 0, -5], name: 'spiral1' } },
-      { type: 'SpiralArm', props: { radius: 1.2, length: 2.5, position: [0, 0, 5], name: 'spiral2' } }
+      { type: 'SpiralArm', props: { radius: 1.2, length: 2.5, position: [0, 0, 5], name: 'spiral2' } },
+      
+      // Central Quantum Entanglement Knot
+      { 
+        type: 'QuantumEntanglementKnot', 
+        props: { 
+          radius: 3,
+          tubeRadius: 0.5,
+          position: [0, 0, 0],
+          name: 'quantumKnot',
+          rotationSpeed: new THREE.Vector3(0.005, 0.01, 0.005)
+        } 
+      }
     ];
 
-    setShapes(initialShapes);
+    setShapes(initialShapes.filter(shape => shape.type in shapeComponents));
   }, []);
 
+  // Setup physics and interactions with safety checks
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Initialize movement for all valid shapes
-      Object.entries(shapeRefs.current).forEach(([name, mesh]) => {
-        if (mesh instanceof THREE.Object3D) {
-          movementSystem.current.addObject(mesh, {
-            speed: 0.5 + Math.random(),
-            direction: new THREE.Vector3(
-              Math.random() * 2 - 1,
-              Math.random() * 2 - 1,
-              Math.random() * 2 - 1
-            ).normalize(),
-            rotationSpeed: new THREE.Vector3(
-              Math.random() * 0.01,
-              Math.random() * 0.01,
-              Math.random() * 0.01
-            )
-          });
+      shapesList.current = Object.values(shapeRefs.current).filter(
+        obj => obj?.position && obj?.rotation
+      );
+      
+      // Add movement to orbiting shapes
+      shapesList.current.forEach(mesh => {
+        if (mesh.name !== 'quantumKnot') {
+          movementSystem.current.addObject(mesh);
         }
       });
 
-      // Setup attraction forces with null checks
-      if (shapeRefs.current.torus1 instanceof THREE.Object3D && 
-          shapeRefs.current.torus2 instanceof THREE.Object3D) {
-        movementSystem.current.addAttractionForce(
-          shapeRefs.current.torus1, 
-          shapeRefs.current.torus2, 
-          0.02
-        );
+      // Attract all shapes to quantum knot if it exists
+      const quantumKnot = shapeRefs.current.quantumKnot;
+      if (quantumKnot?.position) {
+        shapesList.current.forEach(mesh => {
+          if (mesh.name !== 'quantumKnot' && mesh.position) {
+            movementSystem.current.addAttractionForce(
+              mesh,
+              quantumKnot,
+              0.015,
+              5
+            );
+          }
+        });
       }
-      if (shapeRefs.current.cube1 instanceof THREE.Object3D && 
-          shapeRefs.current.cube2 instanceof THREE.Object3D) {
-        movementSystem.current.addAttractionForce(
-          shapeRefs.current.cube1, 
-          shapeRefs.current.cube2, 
-          0.015
-        );
-      }
-      if (shapeRefs.current.spiral1 instanceof THREE.Object3D && 
-          shapeRefs.current.spiral2 instanceof THREE.Object3D) {
-        movementSystem.current.addAttractionForce(
-          shapeRefs.current.spiral1, 
-          shapeRefs.current.spiral2, 
-          0.01
-        );
-      }
+
+      // Pair attractions with validation
+      const pairs = [
+        ['torus1', 'torus2', 0.02],
+        ['cube1', 'cube2', 0.015],
+        ['spiral1', 'spiral2', 0.01]
+      ];
+
+      pairs.forEach(([name1, name2, strength]) => {
+        const obj1 = shapeRefs.current[name1];
+        const obj2 = shapeRefs.current[name2];
+        if (obj1?.position && obj2?.position) {
+          movementSystem.current.addAttractionForce(obj1, obj2, strength);
+        }
+      });
     }, 1500);
 
     return () => clearTimeout(timer);
   }, [shapes]);
 
+  // Initialize interlock system with valid shapes
+  const interlockSystem = useInterlockSystem(
+    movementSystem,
+    shapesList.current.filter(
+      s => s?.getInterlockPoints && typeof s.getInterlockPoints === 'function'
+    )
+  );
+
+  // Animation loop with error boundaries
   useFrame(() => {
-    movementSystem.current.update();
-    interlockSystem.current?.update();
+    try {
+      movementSystem.current.update();
+      
+      // Special rotation for quantum knot if it exists
+      const quantumKnot = shapeRefs.current.quantumKnot;
+      if (quantumKnot?.rotation) {
+        quantumKnot.rotation.x += 0.001;
+        quantumKnot.rotation.y += 0.002;
+      }
+      
+      // Safely update interlock system
+      if (interlockSystem.current?.update) {
+        interlockSystem.current.update();
+      }
+    } catch (error) {
+      console.error('Error in animation loop:', error);
+    }
   });
 
+  // Shape component map
   const shapeComponents = {
     HookedTorus,
     PuzzleCube,
-    SpiralArm
+    SpiralArm,
+    QuantumEntanglementKnot
   };
 
   return (
     <>
       {shapes.map((shape, index) => {
         const Component = shapeComponents[shape.type];
+        if (!Component) return null;
+        
         return (
           <Component
             key={`${shape.type}-${index}`}
-            ref={(el) => {
-              if (el instanceof THREE.Object3D && shape.props.name) {
+            ref={el => {
+              if (el && shape.props?.name) {
                 shapeRefs.current[shape.props.name] = el;
-                el.name = shape.props.name;
               }
             }}
             {...shape.props}
